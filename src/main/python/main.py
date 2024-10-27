@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -17,30 +18,34 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title="Llama 3.2 API",
-    description="""
-    API for Meta's Llama 3.2 3B-instruct model.
-
-    ## Available Endpoints
-    - `/`: Welcome page
-    - `/docs`: Interactive API documentation (Swagger UI)
-    - `/redoc`: Alternative API documentation
-    - `/generate`: Generate text from prompt
-    - `/health`: Check API status
-
-    Made with FastAPI and Hugging Face Transformers
-    """,
+    description="API for Meta's Llama 3.2 3B-instruct model",
     version="1.0.0"
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Define request/response models
+
 class Message(BaseModel):
-    role: str = Field(..., description="Role of the message sender (e.g., 'user')")
-    content: str = Field(..., description="Content of the message")
+    role: str = Field(default="user", description="Role of the message sender (e.g., 'user')")
+    content: Optional[str] = Field(None, description="Content of the message")
+    msg: Optional[str] = Field(None, description="Alternative field for content")
+    type: Optional[str] = Field(None, description="Message type")
+
+    def get_content(self) -> str:
+        """Get the message content from either content or msg field"""
+        return self.content or self.msg or ""
 
 
 class GenerateRequest(BaseModel):
-    messages: List[Message]
+    messages: Optional[List[Message]] = None
+    message: Optional[Message] = None  # Single message support
+    msg: Optional[str] = None  # Direct message support
     max_length: Optional[int] = Field(default=512, description="Maximum length of generated text")
     temperature: Optional[float] = Field(default=0.7, description="Temperature for text generation")
     top_p: Optional[float] = Field(default=0.9, description="Top p for nucleus sampling")
@@ -59,6 +64,16 @@ class GenerateRequest(BaseModel):
                 "top_p": 0.9
             }
         }
+
+    def get_messages(self) -> List[dict]:
+        """Get normalized messages list"""
+        if self.messages:
+            return [{"role": msg.role, "content": msg.get_content()} for msg in self.messages]
+        elif self.message:
+            return [{"role": self.message.role, "content": self.message.get_content()}]
+        elif self.msg:
+            return [{"role": "user", "content": self.msg}]
+        return []
 
 
 class GenerateResponse(BaseModel):
@@ -101,13 +116,11 @@ class ModelService:
         try:
             start_time = time.time()
 
-            # Format the conversation
-            conversation = []
-            for msg in request.messages:
-                conversation.append({
-                    "role": msg.role,
-                    "content": msg.content
-                })
+            # Get normalized messages
+            conversation = request.get_messages()
+
+            if not conversation:
+                raise HTTPException(status_code=400, detail="No valid message content provided")
 
             # Convert conversation to model input format
             prompt = self.tokenizer.apply_chat_template(
@@ -156,7 +169,6 @@ class ModelService:
 model_service = ModelService()
 
 
-# Root route with welcome page
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return """
@@ -196,7 +208,7 @@ async def root():
 
                 <h2>Available Endpoints:</h2>
                 <ul>
-                    <li><a href="/docs">/docs</a> - Interactive API documentation (Swagger UI)</li>
+                    <li><a href="/docs">/docs</a> - Interactive API documentation</li>
                     <li><a href="/redoc">/redoc</a> - Alternative API documentation</li>
                     <li><code>POST /generate</code> - Generate text from prompt</li>
                     <li><a href="/health">/health</a> - Check API status</li>
@@ -228,7 +240,7 @@ async def generate_text(request: GenerateRequest):
     Generate text based on the input messages
     """
     try:
-        return model_service.generate(request)
+        return model_service.generate(request).model_dump()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
