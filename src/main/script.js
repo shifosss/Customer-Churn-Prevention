@@ -1,8 +1,3 @@
-// Placeholder function for the spam detection model; for demonstration only
-function mockSpamDetection(message) {
-    return message.includes("win") || message.includes("free");
-}
-
 
 
 // Main function that handles spam detection
@@ -23,7 +18,8 @@ async function checkSpam() {
     const resultElement = document.getElementById("result");
 
     resultElement.textContent = "Checking for spam...";
-
+    
+   
     try {
         const response = await fetch("http://127.0.0.1:8008/generate", {
             method: "POST",
@@ -45,14 +41,21 @@ async function checkSpam() {
         });
 
         if (!response.ok) {
-            throw new Error(`Server responded with status: ${response.status}`);
+            throw new Error("Failed to reach the server.");
         }
 
         const data = await response.json();
-        // The API returns generated_text and generation_time
-        resultElement.textContent = data.generated_text;
+        resultElement.textContent = data.isSpam ? "This is spam." : "This is not spam.";
     } catch (error) {
-        console.error("Error details:", error);
+        console.error("Error: ", error);
         resultElement.textContent = "Error: " + error.message;
-    }
+     }
 }
+
+
+function resetForm() {
+    document.getElementById("messageInput").value = ""; // Clear the message input
+    document.getElementById("result").textContent = ""; // Clear the result text
+}
+
+

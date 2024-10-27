@@ -108,7 +108,7 @@ class ModelService:
         self.model = None
         self.tokenizer = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model_name = "meta-llama/Llama-3.2-3B-Instruct"
+        self.model_name = "AlexZhang05/autotrain-llama3-2-3B-FineTune"
         self.system_prompt = \
             """You are a helpful AI assistant. Provide clear and accurate responses. You must generate a <label>
              (Spam or Ham) for the given input_. Your output should be in format: It is a <label>. Please avoid any other unnecessary or unrelated responses.
@@ -221,7 +221,7 @@ async def root():
     return """
     <html>
         <head>
-            <title>Llama 3.2 API</title>
+            <title>Fine-tuned Llama 3.2 API</title>
             <style>
                 body {
                     font-family: Arial, sans-serif;
@@ -251,7 +251,7 @@ async def root():
         <body>
             <div class="container">
                 <h1>Welcome to Llama 3.2 API</h1>
-                <p>This API provides access to Meta's Llama 3.2 3B-instruct model.</p>
+                <p>This API provides access to Fine-tuned Llama 3.2 3B-instruct model.</p>
 
                 <h2>Available Endpoints:</h2>
                 <ul>
