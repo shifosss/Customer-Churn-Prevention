@@ -87,6 +87,21 @@ class HealthResponse(BaseModel):
     device: str
     model_name: str
 
+# Add these new classes near your other model definitions
+class SystemPromptRequest(BaseModel):
+    prompt: str = Field(..., description="System prompt to set")
+
+# Add this new endpoint to your FastAPI app
+@app.post("/set_system_prompt")
+async def set_system_prompt(request: SystemPromptRequest):
+    """
+    Update the system prompt used by the model
+    """
+    try:
+        model_service.set_system_prompt(request.prompt)
+        return {"status": "success", "message": "System prompt updated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 class ModelService:
     def __init__(self):
@@ -94,14 +109,22 @@ class ModelService:
         self.tokenizer = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model_name = "meta-llama/Llama-3.2-3B-Instruct"
+        self.system_prompt = \
+            """You are a helpful AI assistant. Provide clear and accurate responses. You must generate a <label>
+             (Spam or Ham) for the given input_. Your output should be in format: It is a <label>. Please avoid any other unnecessary or unrelated responses.
+        """  # Default system prompt
         self.load_model()
+
+    def set_system_prompt(self, prompt: str):
+        """Update the system prompt"""
+        self.system_prompt = prompt
+        logger.info("System prompt updated")
 
     def load_model(self):
         try:
             logger.info(f"Loading {self.model_name} model and tokenizer...")
 
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            # Set padding token
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
                 self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
@@ -111,7 +134,6 @@ class ModelService:
                 torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
                 low_cpu_mem_usage=True,
             )
-            # Make sure the model knows about the padding token
             if self.model.config.pad_token_id is None:
                 self.model.config.pad_token_id = self.tokenizer.pad_token_id
 
@@ -125,13 +147,16 @@ class ModelService:
         try:
             start_time = time.time()
 
-            # Get normalized messages
-            conversation = request.get_messages()
+            # Get normalized messages and add system prompt
+            conversation = [
+                {"role": "system", "content": self.system_prompt}
+            ]
+            conversation.extend(request.get_messages())
 
-            if not conversation:
+            if len(conversation) < 2:  # Only system prompt exists
                 raise HTTPException(status_code=400, detail="No valid message content provided")
 
-            # Convert conversation to model input format
+            # Convert conversation to model input_ format
             prompt = self.tokenizer.apply_chat_template(
                 conversation,
                 tokenize=False,
@@ -161,10 +186,19 @@ class ModelService:
                 )
 
             # Decode and clean up response
-            generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            full_response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
 
-            # Remove the input prompt from the generated text
-            generated_text = generated_text.replace(prompt, "").strip()
+            # Extract only the assistant's response
+            try:
+                # Find the last assistant response
+                if "assistant" in full_response:
+                    generated_text = full_response.split("assistant")[-1].strip()
+                else:
+                    # Fallback: just remove the prompt
+                    generated_text = full_response.replace(prompt, "").strip()
+            except Exception as e:
+                logger.error(f"Error cleaning response: {str(e)}")
+                generated_text = full_response
 
             generation_time = time.time() - start_time
 
@@ -250,7 +284,7 @@ async def root():
 @app.post("/generate", response_model=GenerateResponse)
 async def generate_text(request: GenerateRequest):
     """
-    Generate text based on the input messages
+    Generate text based on the input_ messages
     """
     try:
         return model_service.generate(request).model_dump()
