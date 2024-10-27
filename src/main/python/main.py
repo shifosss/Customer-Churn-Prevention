@@ -101,11 +101,20 @@ class ModelService:
             logger.info(f"Loading {self.model_name} model and tokenizer...")
 
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            # Set padding token
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+                self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
                 torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
                 low_cpu_mem_usage=True,
             )
+            # Make sure the model knows about the padding token
+            if self.model.config.pad_token_id is None:
+                self.model.config.pad_token_id = self.tokenizer.pad_token_id
+
             self.model.to(self.device)
             logger.info(f"Model loaded successfully on {self.device}")
         except Exception as e:
@@ -129,21 +138,25 @@ class ModelService:
                 add_generation_prompt=True
             )
 
-            # Tokenize
+            # Tokenize with proper padding
             inputs = self.tokenizer(
                 prompt,
                 return_tensors="pt",
-                padding=True
+                padding=True,
+                truncation=True,
+                max_length=request.max_length,
+                return_attention_mask=True
             ).to(self.device)
 
             # Generate
             with torch.no_grad():
                 outputs = self.model.generate(
-                    inputs["input_ids"],
+                    input_ids=inputs["input_ids"],
+                    attention_mask=inputs["attention_mask"],
                     max_length=request.max_length,
                     temperature=request.temperature,
                     top_p=request.top_p,
-                    pad_token_id=self.tokenizer.eos_token_id,
+                    pad_token_id=self.tokenizer.pad_token_id,
                     do_sample=True
                 )
 

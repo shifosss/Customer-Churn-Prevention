@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Message Detector</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Message Detector</h1>
+        <textarea id="messageInput" placeholder="Enter your message here..."></textarea>
+        <button onclick="checkSpam()">Check Message</button>
+        <button onclick="document.getElementById('messageInput').value = ''; document.getElementById('result').textContent = ''">Reset</button>
+        <div id="result" style="margin-top: 20px;"></div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
