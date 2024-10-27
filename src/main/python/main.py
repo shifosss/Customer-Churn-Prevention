@@ -108,7 +108,7 @@ class ModelService:
         self.model = None
         self.tokenizer = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model_name = "AlexZhang05/autotrain-llama3-2-3B-FineTune"
+        self.model_name = "meta-llama/Llama-3.2-3B-Instruct"
         self.system_prompt = \
             """You are a helpful AI assistant. Provide clear and accurate responses. You must generate a <label>
              (Spam or Ham) for the given input_. Your output should be in format: It is a <label>. Please avoid any other unnecessary or unrelated responses.
